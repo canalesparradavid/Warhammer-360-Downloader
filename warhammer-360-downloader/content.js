@@ -3,7 +3,8 @@
  *
  * Muestra un aviso flotante dentro de la página (abajo a la
  * derecha) cuando se detectan imágenes de la vista 360°, con
- * un botón para descargarlas en ZIP.
+ * la lista de modelos detectados (seleccionables) y un botón
+ * para descargarlos en ZIP (una carpeta por modelo).
  *
  * Los estilos se aplican vía CSSOM (el.style.setProperty) dentro
  * de un shadow DOM, para que no los bloquee la CSP del sitio.
@@ -14,7 +15,7 @@
   if (window.__wh360Loaded) return;
   window.__wh360Loaded = true;
 
-  const state = { count: 0, phase: 'idle', done: 0, total: 0, error: '' };
+  const state = { count: 0, phase: 'idle', done: 0, total: 0, error: '', groups: [] };
   let dismissed = false;   // cerrado por el usuario
   let autoHidden = false;  // ocultado solo tras mostrar el éxito
   let hideTimer = null;
@@ -62,7 +63,7 @@
       position: 'fixed',
       right: '16px',
       bottom: '16px',
-      zIndex: '2147483647',
+      'z-index': '9999999999999',
       fontFamily: "'Segoe UI', system-ui, -apple-system, sans-serif",
       fontSize: '13px',
       lineHeight: '1.45',
@@ -101,17 +102,22 @@
     const bar = mk('div', { height: '5px', borderRadius: '4px', background: '#3a3a3a', overflow: 'hidden', marginBottom: '10px', display: 'none' });
     const fill = mk('div', { height: '100%', width: '0%', background: 'linear-gradient(90deg,#C8102E,#ef5350)', transition: 'width 0.15s ease' });
     bar.appendChild(fill);
+
+    const modelsBox = mk('div', { display: 'none', maxHeight: '132px', overflowY: 'auto', marginBottom: '10px', paddingRight: '2px' });
+    const models = mk('div', {});
+    modelsBox.appendChild(models);
+
     const actions = mk('div', { display: 'flex', gap: '8px' });
     const downloadBtn = mk('button', btnStyles(true), '⬇ Descargar ZIP');
     const clearBtn = mk('button', btnStyles(false), 'Limpiar');
     actions.append(downloadBtn, clearBtn);
-    body.append(status, bar, actions);
+    body.append(status, bar, modelsBox, actions);
 
     card.append(header, body);
     shadow.appendChild(card);
     (document.documentElement || document.body).appendChild(host);
 
-    ui = { host, dot, badge, status, bar, fill, downloadBtn, clearBtn, collapseBtn, body, collapsed: false };
+    ui = { host, dot, badge, status, bar, fill, modelsBox, models, modelRows: [], downloadBtn, clearBtn, collapseBtn, body, collapsed: false };
 
     collapseBtn.addEventListener('click', () => {
       ui.collapsed = !ui.collapsed;
@@ -165,9 +171,61 @@
     state.done = Number(message.done) || 0;
     state.total = Number(message.total) || 0;
     state.error = message.error || '';
+    state.groups = Array.isArray(message.groups) ? message.groups : [];
     if (state.phase === 'idle' && state.count > 0) autoHidden = false;
     render();
   });
+
+  /* ---------------- selección de modelos ---------------- */
+
+  function renderModels() {
+    const groups = state.groups || [];
+    ui.models.textContent = '';
+    ui.modelRows = [];
+
+    if (!groups.length) {
+      ui.modelsBox.style.setProperty('display', 'none');
+      return;
+    }
+    ui.modelsBox.style.setProperty('display', 'block');
+
+    /* Cabecera con enlaces "todas"/"ninguna" */
+    const head = mk('div', { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: '#8d8d94', marginBottom: '4px' });
+    head.appendChild(mk('span', {}, groups.length === 1 ? 'Modelo:' : 'Modelos:'));
+    const links = mk('span', {});
+    const allLink = mk('a', { color: '#e08a8a', cursor: 'pointer', textDecoration: 'none', marginLeft: '8px' }, 'todas');
+    const noneLink = mk('a', { color: '#e08a8a', cursor: 'pointer', textDecoration: 'none', marginLeft: '8px' }, 'ninguna');
+    allLink.addEventListener('click', (e) => { e.preventDefault(); setAllModels(true); });
+    noneLink.addEventListener('click', (e) => { e.preventDefault(); setAllModels(false); });
+    links.append(allLink, noneLink);
+    head.appendChild(links);
+    ui.models.appendChild(head);
+
+    groups.forEach((g) => {
+      const row = mk('label', { display: 'flex', alignItems: 'center', gap: '6px', padding: '2px 0', cursor: 'pointer', fontSize: '12px' });
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = g.selected !== false;
+      cb.disabled = state.phase === 'busy';
+      cb.style.setProperty('accent-color', '#C8102E');
+      cb.addEventListener('change', onSelectionChange);
+      const txt = mk('span', { flex: '1', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }, g.label + ' (' + g.count + ')');
+      txt.title = g.label;
+      row.append(cb, txt);
+      ui.models.appendChild(row);
+      ui.modelRows.push({ folder: g.folder, cb: cb });
+    });
+  }
+
+  function onSelectionChange() {
+    const folders = ui.modelRows.filter((r) => r.cb.checked).map((r) => r.folder);
+    send({ type: 'setSelection', folders: folders }, () => {});
+  }
+
+  function setAllModels(checked) {
+    ui.modelRows.forEach((r) => { r.cb.checked = checked; });
+    onSelectionChange();
+  }
 
   /* ---------------- pintado ---------------- */
 
@@ -179,6 +237,7 @@
     ensureUi();
     ui.host.style.setProperty('display', 'block');
     ui.badge.textContent = String(state.count);
+    renderModels();
 
     if (hideTimer) {
       clearTimeout(hideTimer);
@@ -196,7 +255,8 @@
       if (ui.collapsed) ui.collapseBtn.click();
     } else if (state.phase === 'done') {
       ui.dot.style.setProperty('background', '#4CAF50');
-      ui.status.textContent = '✔ ZIP generado con ' + state.count + ' imágenes.';
+      ui.status.textContent =
+        '✔ ZIP generado con ' + state.done + ' imágenes.' + (state.error ? ' (' + state.error + ')' : '');
       ui.bar.style.setProperty('display', 'block');
       ui.fill.style.setProperty('width', '100%');
       ui.downloadBtn.disabled = false;
@@ -230,6 +290,7 @@
     if (!resp || resp.ok !== true) return;
     state.count = resp.count || 0;
     state.phase = resp.busy ? 'busy' : 'idle';
+    state.groups = resp.groups || [];
     render();
   });
 })();

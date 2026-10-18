@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Warhammer 360 Downloader",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Detecta las imágenes de la vista 360° del catálogo Warhammer (URL /app/resources/catalog/product/threeSixty) y las descarga en un único archivo ZIP.",
   "minimum_chrome_version": "102",
   "permissions": ["webRequest", "tabs", "downloads", "storage"],

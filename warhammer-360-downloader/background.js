@@ -4,18 +4,29 @@
  * Intercepta (solo lectura, vía chrome.webRequest) todas las
  * peticiones de red cuya URL contiene:
  *   /app/resources/catalog/product/threeSixty
- * Las agrupa por pestaña y permite descargarlas comprimidas
- * en un archivo .zip (deflate nativo con CompressionStream).
+ * Las agrupa por pestaña y, dentro de cada pestaña, por el
+ * modelo (la subcarpeta que viene después de threeSixty/).
+ * Permite elegir qué modelos descargar y genera un .zip con
+ * una carpeta por modelo (deflate nativo con CompressionStream).
  * ============================================================ */
 
 const URL_MARKER = '/app/resources/catalog/product/threeSixty';
 const STORAGE_KEY = 'detections_v1';
+const SEL_KEY = 'selections_v1';
+
+// Caracteres no permitidos en nombres de carpeta/archivo del ZIP
+// (se conservan letras y números de cualquier idioma).
+const BAD_CHARS = /[^\p{L}\p{N}._-]+/gu;
+
 // El filtro es amplio (válido como match pattern: el path empieza por "/*")
 // y la comprobación exacta del marcador se hace en onRequestCompleted.
 const URL_FILTERS = ['*://*/*threeSixty*'];
 
 /** tabId -> { urls: string[], lastSeen: number } */
 const detections = new Map();
+
+/** tabId -> Set de carpetas de modelo seleccionadas (ausente = todas) */
+const selections = new Map();
 
 /** pestañas con una descarga ZIP en curso */
 const busyTabs = new Set();
@@ -28,13 +39,22 @@ let persistTimer = null;
 
 const storageReady = (async () => {
   try {
-    const data = (await chrome.storage.session.get(STORAGE_KEY))[STORAGE_KEY];
+    const all = await chrome.storage.session.get([STORAGE_KEY, SEL_KEY]);
+
+    const data = all[STORAGE_KEY];
     if (data) {
       for (const key of Object.keys(data)) {
         const entry = data[key];
         if (entry && Array.isArray(entry.urls)) {
           detections.set(Number(key), { urls: entry.urls, lastSeen: entry.lastSeen || 0 });
         }
+      }
+    }
+
+    const sel = all[SEL_KEY];
+    if (sel) {
+      for (const key of Object.keys(sel)) {
+        if (Array.isArray(sel[key])) selections.set(Number(key), new Set(sel[key]));
       }
     }
   } catch (err) {
@@ -45,9 +65,11 @@ const storageReady = (async () => {
 function persistSoon() {
   clearTimeout(persistTimer);
   persistTimer = setTimeout(() => {
-    const obj = {};
-    for (const [tabId, entry] of detections) obj[tabId] = entry;
-    chrome.storage.session.set({ [STORAGE_KEY]: obj }).catch(() => {});
+    const det = {};
+    for (const [tabId, entry] of detections) det[tabId] = entry;
+    const sel = {};
+    for (const [tabId, folders] of selections) sel[tabId] = Array.from(folders);
+    chrome.storage.session.set({ [STORAGE_KEY]: det, [SEL_KEY]: sel }).catch(() => {});
   }, 200);
 }
 
@@ -81,7 +103,7 @@ function onRequestCompleted(details) {
 
     // Mientras se genera un ZIP no se toca la interfaz para no pisar el progreso.
     if (!busyTabs.has(tabId)) {
-      notifyTab(tabId, { type: 'WH360_STATE', count: entry.urls.length, state: 'idle', done: 0, total: 0, error: '' });
+      notifyTab(tabId, statePayload(tabId, 'idle', 0, 0, ''));
     }
   });
 }
@@ -92,6 +114,66 @@ function pathOf(url) {
   } catch (e) {
     return String(url).split('?')[0];
   }
+}
+
+/* ------------------------------------------------------------
+ * Agrupación por modelo (subcarpeta tras threeSixty/)
+ *   .../threeSixty/modeloA/img_01.jpg  -> grupo "modeloA"
+ *   .../threeSixty/img_01.jpg          -> grupo "" (general)
+ * ------------------------------------------------------------ */
+
+function groupOf(url) {
+  const path = pathOf(url);
+  const idx = path.indexOf(URL_MARKER);
+  const rest = idx >= 0 ? path.slice(idx + URL_MARKER.length) : path;
+  const segments = rest.split('/').filter(Boolean);
+  return segments.length > 1 ? segments.slice(0, -1).join('/') : '';
+}
+
+function buildGroups(urls) {
+  const map = new Map();
+  for (const url of urls) {
+    const folder = groupOf(url);
+    if (!map.has(folder)) map.set(folder, []);
+    map.get(folder).push(url);
+  }
+  map.forEach((arr) =>
+    arr.sort((a, b) => pathOf(a).localeCompare(pathOf(b), undefined, { numeric: true, sensitivity: 'base' }))
+  );
+  return map;
+}
+
+/** Lista de grupos lista para la interfaz, con la selección actual. */
+function groupsArray(tabId) {
+  const entry = detections.get(tabId);
+  if (!entry) return [];
+  const sel = selections.get(tabId);
+  const groupMap = buildGroups(entry.urls);
+  const arr = [];
+  groupMap.forEach((urls, folder) => {
+    arr.push({
+      folder: folder,
+      label: folder || 'general',
+      count: urls.length,
+      firstUrl: urls[0],
+      selected: !sel || sel.has(folder)
+    });
+  });
+  arr.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' }));
+  return arr;
+}
+
+function statePayload(tabId, phase, done, total, error) {
+  const entry = detections.get(tabId);
+  return {
+    type: 'WH360_STATE',
+    count: entry ? entry.urls.length : 0,
+    state: phase,
+    done: done || 0,
+    total: total || 0,
+    error: error || '',
+    groups: groupsArray(tabId)
+  };
 }
 
 /* ------------------------------------------------------------
@@ -116,10 +198,13 @@ function updateBadge(tabId) {
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status === 'loading' && changeInfo.url) {
     storageReady.then(() => {
+      const hadSel = selections.delete(tabId);
       if (detections.delete(tabId)) {
         persistSoon();
         updateBadge(tabId);
         broadcast({ type: 'wh360-event', tabId, event: 'cleared' });
+      } else if (hadSel) {
+        persistSoon();
       }
     });
   }
@@ -127,7 +212,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   storageReady.then(() => {
-    if (detections.delete(tabId)) persistSoon();
+    const hadSel = selections.delete(tabId);
+    if (detections.delete(tabId) || hadSel) persistSoon();
   });
 });
 
@@ -150,20 +236,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           ok: true,
           count: entry ? entry.urls.length : 0,
           urls: entry ? entry.urls.slice() : [],
+          groups: typeof tabId === 'number' ? groupsArray(tabId) : [],
           busy: typeof tabId === 'number' && busyTabs.has(tabId)
         });
       });
       return true; // respuesta asíncrona
 
+    case 'setSelection':
+      storageReady.then(() => {
+        if (Array.isArray(message.folders)) {
+          selections.set(tabId, new Set(message.folders));
+          persistSoon();
+        }
+        sendResponse({ ok: true });
+      });
+      return true;
+
     case 'clear':
     case 'clear-from-page':
       storageReady.then(() => {
+        selections.delete(tabId);
         if (detections.delete(tabId)) {
           persistSoon();
           updateBadge(tabId);
           broadcast({ type: 'wh360-event', tabId, event: 'cleared' });
         }
-        notifyTab(tabId, { type: 'WH360_STATE', count: 0, state: 'idle', done: 0, total: 0, error: '' });
+        notifyTab(tabId, { type: 'WH360_STATE', count: 0, state: 'idle', done: 0, total: 0, error: '', groups: [] });
         sendResponse({ ok: true });
       });
       return true;
@@ -192,19 +290,11 @@ function broadcast(payload) {
 }
 
 function setTabState(tabId, state, done, total, error) {
-  const entry = detections.get(tabId);
-  notifyTab(tabId, {
-    type: 'WH360_STATE',
-    count: entry ? entry.urls.length : 0,
-    state: state,
-    done: done || 0,
-    total: total || 0,
-    error: error || ''
-  });
+  notifyTab(tabId, statePayload(tabId, state, done, total, error));
 }
 
 /* ------------------------------------------------------------
- * Descarga + creación del ZIP
+ * Descarga + creación del ZIP (una carpeta por modelo)
  * ------------------------------------------------------------ */
 
 async function startDownload(tabId, titleHint, saveAs) {
@@ -215,31 +305,44 @@ async function startDownload(tabId, titleHint, saveAs) {
   const entry = detections.get(tabId);
   if (!entry || !entry.urls.length) throw new Error('No se han detectado imágenes 360° en esta pestaña.');
 
+  const sel = selections.get(tabId);
+  const groupMap = buildGroups(entry.urls);
+  const chosen = [];
+  groupMap.forEach((urls, folder) => {
+    if (!sel || sel.has(folder)) chosen.push({ folder: folder, urls: urls });
+  });
+  chosen.sort((a, b) => a.folder.localeCompare(b.folder, undefined, { numeric: true, sensitivity: 'base' }));
+  if (!chosen.length) throw new Error('No has seleccionado ningún modelo para descargar.');
+
   busyTabs.add(tabId);
 
-  const total = entry.urls.length;
-  const urls = entry.urls
-    .slice()
-    .sort((a, b) => pathOf(a).localeCompare(pathOf(b), undefined, { numeric: true, sensitivity: 'base' }));
+  let total = 0;
+  for (const group of chosen) total += group.urls.length;
 
   try {
     const files = [];
     let failures = 0;
+    let processed = 0;
 
-    for (let i = 0; i < urls.length; i++) {
-      const progress = { stage: 'downloading', done: i, total: total, failures: failures };
-      broadcast(Object.assign({ type: 'wh360-progress', tabId: tabId }, progress));
-      setTabState(tabId, 'busy', i, total);
+    for (const group of chosen) {
+      const prefix = zipFolderPrefix(group.folder);
+      for (let i = 0; i < group.urls.length; i++) {
+        const url = group.urls[i];
+        broadcast({ type: 'wh360-progress', tabId: tabId, stage: 'downloading', done: processed, total: total, failures: failures });
+        setTabState(tabId, 'busy', processed, total);
 
-      try {
-        const res = await fetch(urls[i], { credentials: 'omit', redirect: 'follow' });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const bytes = new Uint8Array(await res.arrayBuffer());
-        if (!bytes.length) throw new Error('respuesta vacía');
-        files.push({ name: fileNameFor(urls[i], bytes, i, res.headers.get('content-type')), data: bytes });
-      } catch (err) {
-        failures++;
-        console.warn('[WH360] Fallo al descargar:', urls[i], err);
+        try {
+          const res = await fetch(url, { credentials: 'omit', redirect: 'follow' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const bytes = new Uint8Array(await res.arrayBuffer());
+          if (!bytes.length) throw new Error('respuesta vacía');
+          // La numeración (001_, 002_...) empieza en cada modelo.
+          files.push({ name: prefix + fileNameFor(url, bytes, i, res.headers.get('content-type')), data: bytes });
+        } catch (err) {
+          failures++;
+          console.warn('[WH360] Fallo al descargar:', url, err);
+        }
+        processed++;
       }
     }
 
@@ -260,9 +363,12 @@ async function startDownload(tabId, titleHint, saveAs) {
       saveAs: Boolean(saveAs)
     });
 
-    const done = { stage: 'done', done: total, total: total, failures: failures, zipName: filename, zipSize: zipBlob.size };
-    broadcast(Object.assign({ type: 'wh360-progress', tabId: tabId }, done));
-    setTabState(tabId, 'done', total, total);
+    const warn = failures ? failures + ' imágenes fallaron' : '';
+    broadcast({
+      type: 'wh360-progress', tabId: tabId, stage: 'done',
+      done: files.length, total: total, failures: failures, zipName: filename, zipSize: zipBlob.size
+    });
+    setTabState(tabId, 'done', files.length, total, warn);
 
     return { ok: true, count: files.length, failures: failures, zipName: filename, zipSize: zipBlob.size };
   } finally {
@@ -271,8 +377,21 @@ async function startDownload(tabId, titleHint, saveAs) {
 }
 
 /* ------------------------------------------------------------
- * Nombres de archivo
+ * Nombres de archivo y carpetas dentro del ZIP
  * ------------------------------------------------------------ */
+
+function sanitizePart(part) {
+  return String(part)
+    .replace(BAD_CHARS, '_')
+    .replace(/^\.+/, '')
+    .replace(/\.+$/, '');
+}
+
+function zipFolderPrefix(folder) {
+  if (!folder) return '';
+  const parts = folder.split('/').map(sanitizePart).filter((s) => s && s !== '.' && s !== '..');
+  return parts.length ? parts.join('/') + '/' : '';
+}
 
 function fileNameFor(url, bytes, index, mime) {
   let base = pathOf(url).split('/').filter(Boolean).pop() || 'imagen-' + (index + 1);
@@ -282,7 +401,7 @@ function fileNameFor(url, bytes, index, mime) {
     /* se queda con el nombre codificado */
   }
   if (!/\.(jpe?g|png|webp|gif|avif)$/i.test(base)) base += extFrom(bytes, mime);
-  base = base.replace(/[^\w.\-]+/g, '_');
+  base = sanitizePart(base);
   if (base.length > 80) {
     const dot = base.lastIndexOf('.');
     base = base.slice(0, 80) + (dot > 0 ? base.slice(dot) : '');

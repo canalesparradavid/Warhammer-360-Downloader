@@ -7,7 +7,7 @@
 }
 
 body {
-  width: 320px;
+  width: 330px;
   margin: 0;
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   font-size: 13px;
@@ -77,26 +77,65 @@ section {
   color: #8d8d94;
 }
 
-.thumbs {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
-  margin-bottom: 8px;
+.models-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #8d8d94;
+  margin-bottom: 6px;
 }
 
-.thumbs img {
-  width: 100%;
-  aspect-ratio: 1;
+.models-head .links a {
+  color: #e08a8a;
+  text-decoration: none;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+.models {
+  max-height: 180px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+
+.model-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.model-row input {
+  accent-color: #C8102E;
+  flex: 0 0 auto;
+  cursor: pointer;
+}
+
+.model-row img {
+  width: 36px;
+  height: 36px;
   object-fit: cover;
   border-radius: 6px;
   background: #26262b;
   border: 1px solid #2e2e33;
+  flex: 0 0 auto;
 }
 
-.more {
-  margin: 0 0 10px;
-  font-size: 11px;
+.model-row .name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.model-row .count {
   color: #8d8d94;
+  font-size: 11px;
+  flex: 0 0 auto;
 }
 
 .row {

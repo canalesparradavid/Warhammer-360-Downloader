@@ -12,12 +12,26 @@ en un único archivo **`.zip`** con un solo clic.
    `/app/resources/catalog/product/threeSixty`, esa imagen se registra (sin duplicados)
    para esa pestaña.
 2. **Aviso en la página** — En cuanto se detecta la primera imagen, aparece un
-   popup flotante abajo a la derecha de la propia página con el contador y el botón
-   **«⬇ Descargar ZIP»**. Se puede plegar (–) o cerrar (×).
-3. **Descarga** — Al pulsar el botón (desde el aviso flotante o desde el icono de
-   la extensión en la barra de herramientas), la extensión vuelve a descargar todas
-   las imágenes detectadas, las comprime en deflate (nativo, sin librerías externas)
-   y las guarda como `warhammer-360_<producto>_<fecha>.zip`.
+   popup flotante abajo a la derecha de la propia página con el contador, la lista
+   de **modelos detectados** (uno por subcarpeta dentro de `threeSixty/`, cada uno
+   con su casilla de selección) y el botón **«⬇ Descargar ZIP»**. Se puede plegar
+   (–) o cerrar (×).
+3. **Descarga** — Elige qué modelos marcar y al pulsar el botón (desde el aviso
+   flotante o desde el icono de la extensión en la barra de herramientas), la
+   extensión vuelve a descargar solo las imágenes de esos modelos, las comprime
+   en deflate (nativo, sin librerías externas) y las guarda como
+   `warhammer-360_<producto>_<fecha>.zip` **con una carpeta por modelo** y las
+   imágenes numeradas dentro de cada una:
+
+   ```
+   warhammer-360_producto_20261018-120000.zip
+   ├── modeloA/
+   │   ├── 001_vista_01.jpg
+   │   └── 002_vista_02.jpg
+   └── modeloB/
+       ├── 001_vista_01.jpg
+       └── 002_vista_02.jpg
+   ```
 
 El contador de imágenes también aparece en **rojo sobre el icono** de la extensión
 (insignia por pestaña). La lista se limpia automáticamente al navegar a otra página
@@ -36,14 +50,17 @@ o al cerrar la pestaña, o manualmente con el botón «Limpiar».
 1. Ve a la web de Warhammer (por ejemplo, la ficha de un producto) y haz clic en la
    vista **360°** del producto.
 2. Cuando la página empiece a cargar las imágenes de la vista 360°, verás el aviso
-   flotante: *«N imágenes de vista 360° detectadas»*.
-3. Pulsa **«⬇ Descargar ZIP»** y elige dónde guardarlo (o desmarca
-   «Preguntar dónde guardar» en la ventana de la extensión para guardarlo directamente
-   en tu carpeta de Descargas).
+   flotante: *«N imágenes de vista 360° detectadas»*. Si el producto tiene varios
+   modelos, se listan con sus casillas (enlaces «todas» / «ninguna» para marcar
+   rápidamente).
+3. Selecciona los modelos que quieras y pulsa **«⬇ Descargar ZIP»** y elige dónde
+   guardarlo (o desmarca «Preguntar dónde guardar» en la ventana de la extensión
+   para guardarlo directamente en tu carpeta de Descargas).
 
 También puedes hacer clic en el icono de la extensión en cualquier momento: muestra
-miniaturas de las imágenes detectadas, el total y los botones **Descargar ZIP** /
-**Limpiar**.
+la lista de modelos detectados (con miniatura y número de imágenes de cada uno),
+el total y los botones **Descargar ZIP** / **Limpiar**. La selección de modelos es
+la misma desde el aviso flotante y desde la ventana de la extensión.
 
 ## Archivos
 

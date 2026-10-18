@@ -6,12 +6,15 @@ const $ = (id) => document.getElementById(id);
 
 let tabId = null;
 let productTitle = '';
+let modelRows = []; // { folder, cb }
 
 document.addEventListener('DOMContentLoaded', init);
 
 function init() {
   $('download').addEventListener('click', onDownload);
   $('clear').addEventListener('click', onClear);
+  $('selectAll').addEventListener('click', (e) => { e.preventDefault(); setAllModels(true); });
+  $('selectNone').addEventListener('click', (e) => { e.preventDefault(); setAllModels(false); });
 
   chrome.storage.sync.get({ saveAs: true }, (prefs) => {
     $('saveAs').checked = prefs.saveAs !== false;
@@ -64,7 +67,7 @@ function renderState(resp) {
     return;
   }
 
-  renderThumbs(resp.urls || []);
+  renderModels(resp.groups || [], Boolean(resp.busy));
 
   if (resp.busy) {
     $('download').disabled = true;
@@ -79,25 +82,67 @@ function renderState(resp) {
   }
 }
 
-function renderThumbs(urls) {
-  const wrap = $('thumbs');
+/* ---------------- selección de modelos ---------------- */
+
+function renderModels(groups, disabled) {
+  const wrap = $('models');
   wrap.textContent = '';
-  const MAX = 12;
-  urls.slice(0, MAX).forEach((url) => {
-    const img = document.createElement('img');
-    img.src = url;
-    img.loading = 'lazy';
-    img.alt = '';
-    wrap.appendChild(img);
-  });
-  const more = $('more');
-  if (urls.length > MAX) {
-    more.hidden = false;
-    more.textContent = '+' + (urls.length - MAX) + ' imágenes más';
-  } else {
-    more.hidden = true;
+  modelRows = [];
+
+  if (!groups.length) {
+    $('modelsHead').style.display = 'none';
+    const p = document.createElement('p');
+    p.className = 'hint';
+    p.textContent = 'Sin grupos de modelos todavía.';
+    wrap.appendChild(p);
+    return;
   }
+  $('modelsHead').style.display = 'flex';
+
+  groups.forEach((g) => {
+    const row = document.createElement('div');
+    row.className = 'model-row';
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = g.selected !== false;
+    cb.disabled = disabled;
+    cb.addEventListener('change', sendSelection);
+
+    const img = document.createElement('img');
+    img.src = g.firstUrl;
+    img.alt = '';
+    img.loading = 'lazy';
+
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = g.label;
+    name.title = g.label;
+
+    const cnt = document.createElement('span');
+    cnt.className = 'count';
+    cnt.textContent = g.count + ' img';
+
+    row.append(cb, img, name, cnt);
+    wrap.appendChild(row);
+    modelRows.push({ folder: g.folder, cb: cb });
+  });
 }
+
+function setAllModels(checked) {
+  modelRows.forEach((r) => { r.cb.checked = checked; });
+  sendSelection();
+}
+
+function sendSelection() {
+  if (tabId === null) return;
+  const folders = modelRows.filter((r) => r.cb.checked).map((r) => r.folder);
+  chrome.runtime.sendMessage({ type: 'setSelection', tabId: tabId, folders: folders }, () => {
+    void chrome.runtime.lastError;
+  });
+}
+
+/* ---------------- descarga ---------------- */
 
 function onDownload() {
   if (tabId === null) return;
