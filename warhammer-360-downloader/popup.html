@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="popup.css" />
+  <title>Warhammer 360 Downloader</title>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <img src="icons/icon48.png" alt="" width="30" height="30" />
+      <div class="brand-text">
+        <h1>Warhammer 360</h1>
+        <p id="tabTitle" class="tab-title">Cargando…</p>
+      </div>
+    </div>
+    <span id="countBadge" class="badge">0</span>
+  </header>
+
+  <section id="empty" class="empty">
+    <p>Aún no se han detectado imágenes de vista 360°.</p>
+    <p class="hint">
+      Abre la vista 360° de un producto en la web de Warhammer: en cuanto la página
+      empiece a pedir las imágenes, aparecerán aquí (y verás un aviso flotante en la propia página).
+    </p>
+  </section>
+
+  <section id="content" hidden>
+    <div id="thumbs" class="thumbs"></div>
+    <p id="more" class="more" hidden></p>
+
+    <label class="row">
+      <input type="checkbox" id="saveAs" checked />
+      <span>Preguntar dónde guardar</span>
+    </label>
+
+    <div class="actions">
+      <button id="download" class="btn primary">Descargar ZIP</button>
+      <button id="clear" class="btn">Limpiar</button>
+    </div>
+  </section>
+
+  <div class="status">
+    <div class="bar"><div id="barFill"></div></div>
+    <p id="statusText">Listo.</p>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

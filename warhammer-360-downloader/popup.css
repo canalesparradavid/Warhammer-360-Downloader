@@ -1,0 +1,169 @@
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 320px;
+  margin: 0;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 13px;
+  color: #f1f1f1;
+  background: #17171a;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid #2c2c30;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.brand img {
+  border-radius: 6px;
+  flex: 0 0 auto;
+}
+
+.brand-text {
+  min-width: 0;
+}
+
+h1 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.tab-title {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: #9a9aa0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge {
+  background: #C8102E;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-weight: 700;
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+
+section {
+  padding: 12px;
+}
+
+.empty p {
+  margin: 0 0 6px;
+  color: #cfcfd4;
+}
+
+.hint {
+  font-size: 11px;
+  color: #8d8d94;
+}
+
+.thumbs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.thumbs img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #26262b;
+  border: 1px solid #2e2e33;
+}
+
+.more {
+  margin: 0 0 10px;
+  font-size: 11px;
+  color: #8d8d94;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0;
+  font-size: 12px;
+  color: #cfcfd4;
+  cursor: pointer;
+}
+
+.row input {
+  accent-color: #C8102E;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn {
+  flex: 1;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  background: #2e2e33;
+  color: #e5e5ea;
+  font-family: inherit;
+}
+
+.btn.primary {
+  background: linear-gradient(180deg, #d21c2c, #98101c);
+  color: #ffffff;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.status {
+  padding: 0 12px 12px;
+}
+
+.bar {
+  height: 5px;
+  border-radius: 4px;
+  background: #2e2e33;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.bar > div {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #C8102E, #ef5350);
+  transition: width 0.15s ease;
+}
+
+#statusText {
+  margin: 0;
+  font-size: 11px;
+  color: #8d8d94;
+  min-height: 14px;
+  word-break: break-word;
+}
